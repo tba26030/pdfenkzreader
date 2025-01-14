@@ -1,86 +1,76 @@
-import streamlit as st
-import fitz  # PyMuPDF for PDF
-from ebooklib import epub  # For EPUB
-from bs4 import BeautifulSoup  # For parsing EPUB content
-import mammoth  # For DOC/DOCX
-import openai
-import streamlit.components.v1 as components
 import os
+import streamlit as st
 from uuid import uuid4
+from pathlib import Path
+import openai
 
-# Initialize session state for the word list
-if "word_list" not in st.session_state:
-    st.session_state.word_list = []
-
-# Sidebar for OpenAI API key input
+# Initialize OpenAI API key input
 api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
 
-# Function to translate words
+# Ensure a folder for serving static files
+STATIC_DIR = Path("streamlit_static")
+STATIC_DIR.mkdir(exist_ok=True)
+
+# Function to translate words using GPT
 def translate_word(api_key, word):
-    """Translate a word from English to Kazakh using the updated OpenAI API."""
+    """Translate a word from English to Kazakh using OpenAI."""
     try:
         openai.api_key = api_key
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a translator that only translates English to Kazakh."},
+                {"role": "system", "content": "You are a translator that only translates English words to Kazakh."},
                 {"role": "user", "content": f"Translate this word to Kazakh: {word}"}
-            ]
+            ],
         )
         return response.choices[0].message["content"].strip()
     except Exception as e:
         st.error(f"Error with OpenAI API: {str(e)}")
         return None
 
-def save_word_pair(english_word, kazakh_word):
-    """Saves the word pair to session state."""
-    st.session_state.word_list.append({"English": english_word, "Kazakh": kazakh_word})
-    st.success(f"Saved '{english_word}' - '{kazakh_word}' to the word list.")
-
-# File uploader for user-uploaded PDFs
+# File uploader for PDF files
 uploaded_file = st.file_uploader("Upload your PDF", type=["pdf"])
 
 if uploaded_file:
-    # Save the uploaded file to a temporary directory
-    temp_dir = "temp"
-    os.makedirs(temp_dir, exist_ok=True)
-    file_id = str(uuid4())  # Generate a unique ID for the file
-    file_path = os.path.join(temp_dir, f"{file_id}.pdf")
-
+    # Save the uploaded file to the static folder
+    file_id = str(uuid4())
+    file_path = STATIC_DIR / f"{file_id}.pdf"
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    # Serve the PDF file dynamically by injecting its path into the HTML
+    # Construct a URL for the PDF file
+    pdf_url = f"/{file_path.relative_to(Path.cwd())}"
+
+    # Embed the iframe pointing to the index.html with the PDF URL
     clicked_word = st.components.v1.html(
-        f"""
+        f'''
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>PDF Viewer</title>
         </head>
         <body>
             <iframe
-                src="/pdf_viewer_component/index.html?pdfUrl=file://{file_path}"
+                src="/pdf_viewer_component/index.html?pdfUrl={pdf_url}"
                 width="100%"
                 height="800px"
                 style="border:none;">
             </iframe>
         </body>
         </html>
-        """,
+        ''',
         height=800,
     )
 
-    # Check if a clicked word was received
+    # Process clicked word for translation
     if isinstance(clicked_word, str):
         st.write(f"**Clicked Word:** {clicked_word}")
-        # Implement your translation logic here
-    else:
-        st.warning("No word was clicked yet.")
-
-# Display saved word list
-if st.session_state.word_list:
-    st.subheader("Saved Word List")
-    st.json(st.session_state.word_list)
+        if api_key:
+            translation = translate_word(api_key, clicked_word)
+            if translation:
+                st.write(f"**Translation:** {clicked_word} → {translation}")
+        else:
+            st.warning("Please enter your OpenAI API key in the sidebar.")
+else:
+    st.warning("Please upload a PDF to view it.")

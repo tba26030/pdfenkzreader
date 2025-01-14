@@ -79,3 +79,59 @@ else:
 if st.session_state.word_list:
     st.subheader("Saved Word List")
     st.json(st.session_state.word_list)
+
+import streamlit as st
+
+# Embed the HTML content directly into Streamlit
+html_content = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Viewer</title>
+    <script src="https://mozilla.github.io/pdf.js/build/pdf.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #viewer {
+            height: 100vh;
+            width: 100vw;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="viewer"></canvas>
+    <script>
+        const url = "sample.pdf"; // Replace with your dynamic PDF URL
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        const canvas = document.getElementById('viewer');
+        const ctx = canvas.getContext('2d');
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.js';
+
+        // Load PDF
+        pdfjsLib.getDocument(url).promise.then(pdf => {
+            pdf.getPage(1).then(page => {
+                const viewport = page.getViewport({ scale: 1.5 });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport,
+                };
+                page.render(renderContext);
+            });
+        });
+    </script>
+</body>
+</html>
+"""
+
+# Render the HTML content directly
+st.components.v1.html(html_content, height=800)
+

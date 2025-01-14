@@ -38,8 +38,8 @@ if uploaded_file:
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    # Construct a URL for the PDF file
-    pdf_url = f"/{file_path.relative_to(Path.cwd())}"
+    # Construct a full URL for the PDF file
+    pdf_url = f"/streamlit_static/{file_path.name}"
 
     # Embed the iframe pointing to the index.html with the PDF URL
     clicked_word = st.components.v1.html(

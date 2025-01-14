@@ -1,0 +1,6 @@
+streamlit
+pymupdf
+ebooklib
+bs4
+mammoth
+openai

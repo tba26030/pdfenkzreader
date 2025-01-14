@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup  # For parsing EPUB content
 import mammoth  # For DOC/DOCX
 import openai
 import streamlit.components.v1 as components
+import os
+from uuid import uuid4
 
 # Initialize session state for the word list
 if "word_list" not in st.session_state:
@@ -35,46 +37,48 @@ def save_word_pair(english_word, kazakh_word):
     st.session_state.word_list.append({"English": english_word, "Kazakh": kazakh_word})
     st.success(f"Saved '{english_word}' - '{kazakh_word}' to the word list.")
 
-# File uploader
-uploaded_file = st.file_uploader("Upload your file (PDF, EPUB, DOC, DOCX)", type=["pdf", "epub", "doc", "docx"])
+# File uploader for user-uploaded PDFs
+uploaded_file = st.file_uploader("Upload your PDF", type=["pdf"])
 
 if uploaded_file:
-    file_type = uploaded_file.name.split(".")[-1].lower()
+    # Save the uploaded file to a temporary directory
+    temp_dir = "temp"
+    os.makedirs(temp_dir, exist_ok=True)
+    file_id = str(uuid4())  # Generate a unique ID for the file
+    file_path = os.path.join(temp_dir, f"{file_id}.pdf")
 
-    if file_type == "pdf":
-        # Render the PDF using pdf.js in a custom component
-        clicked_word = components.html(
-            """
-            <iframe id="pdf-viewer" src="pdf_viewer_component/index.html" 
-                    width="100%" height="800px" style="border:none;"></iframe>
-            <script>
-                const iframe = document.getElementById('pdf-viewer');
-                iframe.contentWindow.addEventListener('click', function(event) {
-                    const clickedWord = event.target.textContent.trim(); // Captures the clicked word
-                    if (clickedWord) {
-                        console.log("Clicked Word:", clickedWord); // Debug in browser console
-                        Streamlit.setComponentValue(clickedWord);
-                    }
-                });
-            </script>
-            """,
-            height=800,
-        )
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
 
-        if clicked_word:
-            st.write(f"**Clicked Word:** {clicked_word}")
-            if api_key:
-                translation = translate_word(api_key, clicked_word)
-                if translation:
-                    st.write(f"**Translation:** {clicked_word} → {translation}")
-                    if st.button(f"Save '{clicked_word}' - '{translation}'"):
-                        save_word_pair(clicked_word, translation)
-            else:
-                st.warning("Please enter your OpenAI API key in the sidebar.")
+    # Serve the PDF file dynamically by injecting its path into the HTML
+    clicked_word = st.components.v1.html(
+        f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>PDF Viewer</title>
+        </head>
+        <body>
+            <iframe
+                src="/pdf_viewer_component/index.html?pdfUrl=file://{file_path}"
+                width="100%"
+                height="800px"
+                style="border:none;">
+            </iframe>
+        </body>
+        </html>
+        """,
+        height=800,
+    )
+
+    # Check if a clicked word was received
+    if isinstance(clicked_word, str):
+        st.write(f"**Clicked Word:** {clicked_word}")
+        # Implement your translation logic here
     else:
-        st.error("Currently, only PDFs are supported for direct word selection.")
-else:
-    st.warning("Please upload a PDF file.")
+        st.warning("No word was clicked yet.")
 
 # Display saved word list
 if st.session_state.word_list:

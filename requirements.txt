@@ -3,4 +3,4 @@ pymupdf
 ebooklib
 bs4
 mammoth
-openai
+openai==0.28

@@ -1,3 +1,4 @@
+
 import streamlit as st
 import fitz  # PyMuPDF for PDF
 from ebooklib import epub  # For EPUB
@@ -14,13 +15,13 @@ api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
 
 # Function to translate words
 def translate_word(api_key, word):
-    """Translate a word from English to Kazakh using OpenAI's newer API."""
+    """Translate a word from English to Kazakh using the updated OpenAI API."""
     try:
         openai.api_key = api_key
         response = openai.ChatCompletion.create(
-            model="gpt4o",
+            model="gpt4",
             messages=[
-                {"role": "system", "content": "You are a Kazakh translator."},
+                {"role": "system", "content": "You are a translator that only translates English to Kazakh."},
                 {"role": "user", "content": f"Translate this word to Kazakh: {word}"}
             ],
         )
@@ -33,23 +34,6 @@ def save_word_pair(english_word, kazakh_word):
     """Saves the word pair to session state."""
     st.session_state.word_list.append({"English": english_word, "Kazakh": kazakh_word})
     st.success(f"Saved '{english_word}' - '{kazakh_word}' to the word list.")
-
-def extract_text(file, file_type):
-    """Extract text from non-PDF files."""
-    if file_type == "epub":
-        book = epub.read_epub(file)
-        text = ""
-        for item in book.get_items():
-            if item.get_type() == 9:  # Text type
-                soup = BeautifulSoup(item.get_content(), "html.parser")
-                text += soup.get_text()
-        return text
-    elif file_type in ["doc", "docx"]:
-        content = file.read()
-        result = mammoth.extract_raw_text(content)
-        return result.value
-    else:
-        return None
 
 # File uploader
 uploaded_file = st.file_uploader("Upload your file (PDF, EPUB, DOC, DOCX)", type=["pdf", "epub", "doc", "docx"])
@@ -65,9 +49,12 @@ if uploaded_file:
                     width="100%" height="800px" style="border:none;"></iframe>
             <script>
                 const iframe = document.getElementById('pdf-viewer');
-                iframe.addEventListener('wordClick', (event) => {
-                    const clickedWord = event.detail.word;
-                    Streamlit.setComponentValue(clickedWord);
+                iframe.contentWindow.addEventListener('click', function(event) {
+                    const clickedWord = event.target.textContent.trim(); // Captures the clicked word
+                    if (clickedWord) {
+                        console.log("Clicked Word:", clickedWord); // Debug in browser console
+                        Streamlit.setComponentValue(clickedWord);
+                    }
                 });
             </script>
             """,
@@ -84,28 +71,10 @@ if uploaded_file:
                         save_word_pair(clicked_word, translation)
             else:
                 st.warning("Please enter your OpenAI API key in the sidebar.")
-
     else:
-        # Handle non-PDF files (EPUB, DOC, etc.)
-        text = extract_text(uploaded_file, file_type)
-
-        if text:
-            st.text_area("File Content", text, height=500)
-            word_to_translate = st.text_input("Enter the word you selected for translation:")
-
-            if st.button("Translate"):
-                if api_key and word_to_translate:
-                    translation = translate_word(api_key, word_to_translate)
-                    if translation:
-                        st.write(f"**Translation:** {word_to_translate} → {translation}")
-                        if st.button(f"Save '{word_to_translate}' - '{translation}'"):
-                            save_word_pair(word_to_translate, translation)
-                elif not api_key:
-                    st.warning("Please enter your OpenAI API key in the sidebar.")
-                else:
-                    st.warning("Please select a word first.")
-        else:
-            st.error("Unable to extract text from the uploaded file. Please check the file format.")
+        st.error("Currently, only PDFs are supported for direct word selection.")
+else:
+    st.warning("Please upload a PDF file.")
 
 # Display saved word list
 if st.session_state.word_list:

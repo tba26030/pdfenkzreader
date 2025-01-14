@@ -4,4 +4,3 @@ ebooklib
 bs4
 mammoth
 openai==0.28
-uuid4

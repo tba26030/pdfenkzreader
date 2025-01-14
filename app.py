@@ -14,15 +14,17 @@ api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
 
 # Function to translate words
 def translate_word(api_key, word):
-    """Translate a word from English to Kazakh using OpenAI."""
+    """Translate a word from English to Kazakh using OpenAI's newer API."""
     try:
         openai.api_key = api_key
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": f"Translate this word to Kazakh: {word}"}],
+            model="gpt4o",
+            messages=[
+                {"role": "system", "content": "You are a Kazakh translator."},
+                {"role": "user", "content": f"Translate this word to Kazakh: {word}"}
+            ],
         )
-        translation = response['choices'][0]['message']['content'].strip()
-        return translation
+        return response.choices[0].message["content"].strip()
     except Exception as e:
         st.error(f"Error with OpenAI API: {str(e)}")
         return None

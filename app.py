@@ -1,4 +1,3 @@
-
 import streamlit as st
 import fitz  # PyMuPDF for PDF
 from ebooklib import epub  # For EPUB
@@ -19,11 +18,11 @@ def translate_word(api_key, word):
     try:
         openai.api_key = api_key
         response = openai.ChatCompletion.create(
-            model="gpt4",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a translator that only translates English to Kazakh."},
                 {"role": "user", "content": f"Translate this word to Kazakh: {word}"}
-            ],
+            ]
         )
         return response.choices[0].message["content"].strip()
     except Exception as e:

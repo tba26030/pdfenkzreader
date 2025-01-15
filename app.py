@@ -3,6 +3,26 @@ import streamlit as st
 import re
 import openai
 
+# CSS for Better Readability
+st.markdown("""
+<style>
+#text-container {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    text-align: justify;
+    margin: 10px 0;
+}
+.word {
+    cursor: pointer;
+    color: blue;
+}
+.word:hover {
+    background-color: yellow;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Initialize OpenAI API key input
 api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
 

@@ -12,7 +12,7 @@ if "saved_translations" not in st.session_state:
 if "selected_word" not in st.session_state:
     st.session_state.selected_word = None
 
-# CSS for Better Readability
+# CSS for Better Readability and Tooltips
 st.markdown("""
 <style>
 #text-container {
@@ -25,23 +25,40 @@ st.markdown("""
 .word {
     display: inline-block;
     cursor: pointer;
-    color: blue;
+    color: black;
+    position: relative;
 }
 .word:hover {
     background-color: yellow;
 }
+.tooltip {
+    visibility: hidden;
+    background-color: lightblue;
+    color: black;
+    text-align: center;
+    border-radius: 5px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -60px;
+}
+.word:hover .tooltip {
+    visibility: visible;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# Function to split text into words and make each word clickable
+# Function to split text into words and make them interactive
 def process_text_to_html(text):
-    """Wrap each word in a span for interactivity."""
+    """Wrap each word in a span with a tooltip."""
     words = re.findall(r'\S+|\s+', text)  # Keep words and whitespace
     html_parts = []
-    for i, word in enumerate(words):
+    for word in words:
         if word.strip():  # Only process non-whitespace words
             html_parts.append(
-                f'<span class="word" key="{i}" onclick="streamlit.write({repr(word)})">{word}</span>'
+                f'<span class="word" onclick="handleWordClick(\'{word}\')">{word}<span class="tooltip">Click to translate</span></span>'
             )
         else:
             html_parts.append(word)  # Preserve whitespace
@@ -82,20 +99,18 @@ if uploaded_file:
         if not text.strip():
             st.warning("No text found on this page. Try another page.")
         else:
-            # Display interactive text
-            for word in text.split():
-                if st.button(word, key=f"word-{word}"):
-                    st.session_state.selected_word = word
+            # Display text with interactive words
+            html_content = process_text_to_html(text)
+            st.markdown(f'<div id="text-container">{html_content}</div>', unsafe_allow_html=True)
             
             # Handle word translation
-            if st.session_state.selected_word:
-                selected_word = st.session_state.selected_word
-                st.info(f"Selected word: {selected_word}")
-                with st.spinner(f"Translating '{selected_word}'..."):
-                    translation = translate_word(selected_word)
-                st.success(f"Translation: {selected_word} → {translation}")
+            clicked_word = st.text_input("Clicked Word", value="", key="clicked_word")
+            if clicked_word:
+                with st.spinner(f"Translating '{clicked_word}'..."):
+                    translation = translate_word(clicked_word)
+                st.success(f"Translation: {clicked_word} → {translation}")
                 if st.button("Save Translation"):
-                    st.session_state.saved_translations.append({"English": selected_word, "Kazakh": translation})
+                    st.session_state.saved_translations.append({"English": clicked_word, "Kazakh": translation})
                     st.success("Translation saved!")
     except Exception as e:
         st.error(f"Error processing PDF: {e}")

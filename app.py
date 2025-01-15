@@ -3,6 +3,15 @@ import streamlit as st
 import re
 import openai
 
+# Initialize OpenAI API key input
+api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
+
+# Initialize session state for saved translations and selected word
+if "saved_translations" not in st.session_state:
+    st.session_state.saved_translations = []
+if "selected_word" not in st.session_state:
+    st.session_state.selected_word = None
+
 # CSS for Better Readability
 st.markdown("""
 <style>
@@ -14,6 +23,7 @@ st.markdown("""
     margin: 10px 0;
 }
 .word {
+    display: inline-block;
     cursor: pointer;
     color: blue;
 }
@@ -23,24 +33,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize OpenAI API key input
-api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
-
-# Initialize session state for saved translations and selected word
-if "saved_translations" not in st.session_state:
-    st.session_state.saved_translations = []
-if "selected_word" not in st.session_state:
-    st.session_state.selected_word = None
-
-# Function to split text into words and wrap with spans
+# Function to split text into words and make each word clickable
 def process_text_to_html(text):
     """Wrap each word in a span for interactivity."""
     words = re.findall(r'\S+|\s+', text)  # Keep words and whitespace
     html_parts = []
-    for word in words:
+    for i, word in enumerate(words):
         if word.strip():  # Only process non-whitespace words
             html_parts.append(
-                f'<span class="word" onclick="handleWordClick(\'{word}\')">{word}</span>'
+                f'<span class="word" key="{i}" onclick="streamlit.write({repr(word)})">{word}</span>'
             )
         else:
             html_parts.append(word)  # Preserve whitespace
@@ -82,38 +83,19 @@ if uploaded_file:
             st.warning("No text found on this page. Try another page.")
         else:
             # Display interactive text
-            st.markdown(
-                f"""
-                <div id="text-container">
-                    {process_text_to_html(text)}
-                </div>
-                <script>
-                function handleWordClick(word) {{
-                    const streamlit = parent.streamlit;
-                    streamlit.setComponentValue(word);
-                }}
-                </script>
-                """,
-                unsafe_allow_html=True,
-            )
+            for word in text.split():
+                if st.button(word, key=f"word-{word}"):
+                    st.session_state.selected_word = word
             
             # Handle word translation
-            clicked_word = st.components.v1.html(
-                """
-                <script>
-                const streamlit = window.parent.streamlit;
-                streamlit.setComponentValue(null);
-                </script>
-                """,
-                height=0,
-            )
-            if clicked_word:
-                st.info(f"Selected word: {clicked_word}")
-                with st.spinner(f"Translating '{clicked_word}'..."):
-                    translation = translate_word(clicked_word)
-                st.success(f"Translation: {clicked_word} → {translation}")
+            if st.session_state.selected_word:
+                selected_word = st.session_state.selected_word
+                st.info(f"Selected word: {selected_word}")
+                with st.spinner(f"Translating '{selected_word}'..."):
+                    translation = translate_word(selected_word)
+                st.success(f"Translation: {selected_word} → {translation}")
                 if st.button("Save Translation"):
-                    st.session_state.saved_translations.append({"English": clicked_word, "Kazakh": translation})
+                    st.session_state.saved_translations.append({"English": selected_word, "Kazakh": translation})
                     st.success("Translation saved!")
     except Exception as e:
         st.error(f"Error processing PDF: {e}")

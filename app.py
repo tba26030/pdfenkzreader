@@ -2,6 +2,16 @@ import fitz  # PyMuPDF for handling PDFs
 import streamlit as st
 import re
 from streamlit_js_eval import streamlit_js_eval
+from openai import OpenAI
+import os
+
+# Initialize OpenAI client
+if "OPENAI_API_KEY" not in st.secrets:
+    st.sidebar.text_input("Enter OpenAI API Key", type="password", key="openai_api_key")
+    if "openai_api_key" in st.session_state:
+        client = OpenAI(api_key=st.session_state.openai_api_key)
+else:
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # Initialize session state
 if "saved_translations" not in st.session_state:
@@ -40,9 +50,22 @@ def process_text(text):
     return words
 
 def get_translation(word):
-    """Mock translation function - replace with actual translation API"""
-    # In a real application, you would integrate with a translation API here
-    return f"Kazakh translation of '{word}'"
+    """Translate word using OpenAI API"""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a translator. Translate the given English word to Kazakh. Provide only the translation without any additional text or explanation."},
+                {"role": "user", "content": f"Translate this word to Kazakh: {word}"}
+            ],
+            temperature=0.3,
+            max_tokens=50
+        )
+        translation = response.choices[0].message.content.strip()
+        return translation
+    except Exception as e:
+        st.error(f"Translation error: {str(e)}")
+        return "Translation failed"
 
 def create_interactive_text(words):
     """Create interactive text with clickable words"""
@@ -78,7 +101,8 @@ if uploaded_file:
         # Handle word selection
         if st.session_state.selected_word:
             word = st.session_state.selected_word
-            translation = get_translation(word)
+            with st.spinner(f'Translating "{word}"...'):
+                translation = get_translation(word)
             
             # Create a modal for translation
             with st.container():
@@ -108,6 +132,22 @@ with st.sidebar:
         st.subheader("Saved Translations")
         for translation in st.session_state.saved_translations:
             st.write(f"🔤 {translation['English']} → {translation['Kazakh']}")
+        
+        # Add export functionality
+        if st.button("Export Translations"):
+            import pandas as pd
+            import base64
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(st.session_state.saved_translations)
+            
+            # Convert to CSV
+            csv = df.to_csv(index=False)
+            b64 = base64.b64encode(csv.encode()).decode()
+            
+            # Create download link
+            href = f'<a href="data:file/csv;base64,{b64}" download="my_translations.csv">Download CSV File</a>'
+            st.markdown(href, unsafe_allow_html=True)
 
 # JavaScript for handling word clicks
 st.markdown("""

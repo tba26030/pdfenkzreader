@@ -1,6 +1,6 @@
-streamlit
-pymupdf
+streamlit==1.25.0
+pymupdf==1.22.3
+openai==0.28
 ebooklib
 bs4
 mammoth
-openai==0.28

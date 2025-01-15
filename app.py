@@ -1,89 +1,44 @@
 import fitz  # PyMuPDF for handling PDFs
 import streamlit as st
 import re
-from streamlit_js_eval import streamlit_js_eval
-from openai import OpenAI
-import os
+import openai
 
-# Initialize OpenAI client
-if "OPENAI_API_KEY" not in st.secrets:
-    st.sidebar.text_input("Enter OpenAI API Key", type="password", key="openai_api_key")
-    if "openai_api_key" in st.session_state:
-        client = OpenAI(api_key=st.session_state.openai_api_key)
-else:
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Initialize OpenAI API key input
+api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
 
-# Initialize session state
+# Initialize session state for saved translations and selected word
 if "saved_translations" not in st.session_state:
     st.session_state.saved_translations = []
 if "selected_word" not in st.session_state:
     st.session_state.selected_word = None
 
-# Custom CSS for word styling and tooltip
-st.markdown("""
-<style>
-.word-span {
-    display: inline;
-    cursor: pointer;
-    padding: 2px;
-}
-.word-span:hover {
-    background-color: #f0f0f0;
-}
-.translation-modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 20px;
-    border-radius: 5px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    z-index: 1000;
-}
-</style>
-""", unsafe_allow_html=True)
-
+# Function to split text into words while preserving whitespace
 def process_text(text):
-    """Split text into words while preserving whitespace and punctuation"""
-    words = re.findall(r'\S+|\s+', text)
-    return words
+    return re.findall(r'\S+|\s+', text)
 
-def get_translation(word):
-    """Translate word using OpenAI API"""
+# Function to translate a word using OpenAI GPT
+def translate_word(word):
     try:
-        response = client.chat.completions.create(
+        if not api_key:
+            raise ValueError("OpenAI API Key is missing.")
+        openai.api_key = api_key
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a translator. Translate the given English word to Kazakh. Provide only the translation without any additional text or explanation."},
+                {"role": "system", "content": "Translate the given English word to Kazakh."},
                 {"role": "user", "content": f"Translate this word to Kazakh: {word}"}
             ],
-            temperature=0.3,
-            max_tokens=50
         )
-        translation = response.choices[0].message.content.strip()
-        return translation
+        return response.choices[0].message["content"].strip()
     except Exception as e:
-        st.error(f"Translation error: {str(e)}")
-        return "Translation failed"
-
-def create_interactive_text(words):
-    """Create interactive text with clickable words"""
-    html_parts = []
-    for word in words:
-        if word.strip():  # If it's a word (not whitespace)
-            html_parts.append(
-                f'<span class="word-span" onclick="handle_word_click(\'{word}\')">{word}</span>'
-            )
-        else:  # If it's whitespace
-            html_parts.append(word)
-    return ''.join(html_parts)
+        return f"Translation error: {e}"
 
 # File uploader for PDFs
 uploaded_file = st.file_uploader("Upload your PDF", type=["pdf"])
 
 if uploaded_file:
     try:
+        # Load the PDF with PyMuPDF
         doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
         page_count = len(doc)
         
@@ -95,68 +50,36 @@ if uploaded_file:
         text = page.get_text("text")
         words = process_text(text)
         
-        # Display interactive text
-        st.markdown(create_interactive_text(words), unsafe_allow_html=True)
-        
-        # Handle word selection
+        # Display text with clickable words
+        st.markdown("### Page Content")
+        for word in words:
+            if word.strip():  # If it's a valid word (not whitespace)
+                if st.button(word):
+                    st.session_state.selected_word = word  # Save the clicked word
+            else:
+                st.write(word, unsafe_allow_html=True)  # Preserve whitespace
+            
+        # Handle word translation if a word is selected
         if st.session_state.selected_word:
             word = st.session_state.selected_word
-            with st.spinner(f'Translating "{word}"...'):
-                translation = get_translation(word)
-            
-            # Create a modal for translation
-            with st.container():
-                col1, col2, col3 = st.columns([1, 2, 1])
-                with col2:
-                    st.markdown("### Translation")
-                    st.write(f"**{word}**: {translation}")
-                    if st.button("Save Translation"):
-                        st.session_state.saved_translations.append({
-                            "English": word,
-                            "Kazakh": translation
-                        })
-                        st.success("Translation saved!")
-                    if st.button("Close"):
-                        st.session_state.selected_word = None
-                        st.rerun()
-        
+            st.info(f"Selected word: {word}")
+            with st.spinner(f"Translating '{word}'..."):
+                translation = translate_word(word)
+            st.success(f"Translation: {word} → {translation}")
+            if st.button("Save Translation"):
+                st.session_state.saved_translations.append({"English": word, "Kazakh": translation})
+                st.success("Translation saved!")
+                st.session_state.selected_word = None  # Clear selection
     except Exception as e:
         st.error(f"Error processing PDF: {e}")
-        
 else:
     st.info("Upload a PDF to get started.")
 
-# Show saved translations in a sidebar
+# Display saved translations in a sidebar
 with st.sidebar:
+    st.subheader("Saved Translations")
     if st.session_state.saved_translations:
-        st.subheader("Saved Translations")
         for translation in st.session_state.saved_translations:
-            st.write(f"🔤 {translation['English']} → {translation['Kazakh']}")
-        
-        # Add export functionality
-        if st.button("Export Translations"):
-            import pandas as pd
-            import base64
-            
-            # Convert to DataFrame
-            df = pd.DataFrame(st.session_state.saved_translations)
-            
-            # Convert to CSV
-            csv = df.to_csv(index=False)
-            b64 = base64.b64encode(csv.encode()).decode()
-            
-            # Create download link
-            href = f'<a href="data:file/csv;base64,{b64}" download="my_translations.csv">Download CSV File</a>'
-            st.markdown(href, unsafe_allow_html=True)
-
-# JavaScript for handling word clicks
-st.markdown("""
-<script>
-function handle_word_click(word) {
-    window.parent.postMessage({
-        type: "streamlit:setComponentValue",
-        value: word
-    }, "*");
-}
-</script>
-""", unsafe_allow_html=True)
+            st.write(f"{translation['English']} → {translation['Kazakh']}")
+    else:
+        st.write("No translations saved yet.")

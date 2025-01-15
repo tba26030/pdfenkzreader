@@ -12,9 +12,19 @@ if "saved_translations" not in st.session_state:
 if "selected_word" not in st.session_state:
     st.session_state.selected_word = None
 
-# Function to split text into words while preserving whitespace
-def process_text(text):
-    return re.findall(r'\S+|\s+', text)
+# Function to split text into words and wrap with spans
+def process_text_to_html(text):
+    """Wrap each word in a span for interactivity."""
+    words = re.findall(r'\S+|\s+', text)  # Keep words and whitespace
+    html_parts = []
+    for word in words:
+        if word.strip():  # Only process non-whitespace words
+            html_parts.append(
+                f'<span class="word" onclick="handleWordClick(\'{word}\')">{word}</span>'
+            )
+        else:
+            html_parts.append(word)  # Preserve whitespace
+    return ''.join(html_parts)
 
 # Function to translate a word using OpenAI GPT
 def translate_word(word):
@@ -31,7 +41,7 @@ def translate_word(word):
         )
         return response.choices[0].message["content"].strip()
     except Exception as e:
-        return f"Translation error: {e}"
+        return f"Error: {e}"
 
 # File uploader for PDFs
 uploaded_file = st.file_uploader("Upload your PDF", type=["pdf"])
@@ -46,30 +56,45 @@ if uploaded_file:
         page_number = st.slider("Select a page", 1, page_count, 1)
         page = doc[page_number - 1]
         
-        # Extract and process text
+        # Extract text
         text = page.get_text("text")
-        words = process_text(text)
-        
-        # Display text with clickable words
-        st.markdown("### Page Content")
-        for word in words:
-            if word.strip():  # If it's a valid word (not whitespace)
-                if st.button(word):
-                    st.session_state.selected_word = word  # Save the clicked word
-            else:
-                st.write(word, unsafe_allow_html=True)  # Preserve whitespace
+        if not text.strip():
+            st.warning("No text found on this page. Try another page.")
+        else:
+            # Display interactive text
+            st.markdown(
+                f"""
+                <div id="text-container">
+                    {process_text_to_html(text)}
+                </div>
+                <script>
+                function handleWordClick(word) {{
+                    const streamlit = parent.streamlit;
+                    streamlit.setComponentValue(word);
+                }}
+                </script>
+                """,
+                unsafe_allow_html=True,
+            )
             
-        # Handle word translation if a word is selected
-        if st.session_state.selected_word:
-            word = st.session_state.selected_word
-            st.info(f"Selected word: {word}")
-            with st.spinner(f"Translating '{word}'..."):
-                translation = translate_word(word)
-            st.success(f"Translation: {word} → {translation}")
-            if st.button("Save Translation"):
-                st.session_state.saved_translations.append({"English": word, "Kazakh": translation})
-                st.success("Translation saved!")
-                st.session_state.selected_word = None  # Clear selection
+            # Handle word translation
+            clicked_word = st.components.v1.html(
+                """
+                <script>
+                const streamlit = window.parent.streamlit;
+                streamlit.setComponentValue(null);
+                </script>
+                """,
+                height=0,
+            )
+            if clicked_word:
+                st.info(f"Selected word: {clicked_word}")
+                with st.spinner(f"Translating '{clicked_word}'..."):
+                    translation = translate_word(clicked_word)
+                st.success(f"Translation: {clicked_word} → {translation}")
+                if st.button("Save Translation"):
+                    st.session_state.saved_translations.append({"English": clicked_word, "Kazakh": translation})
+                    st.success("Translation saved!")
     except Exception as e:
         st.error(f"Error processing PDF: {e}")
 else:
